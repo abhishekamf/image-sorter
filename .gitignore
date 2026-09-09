@@ -1,19 +1,31 @@
 # Python
 __pycache__/
 *.py[cod]
+*.pyo
+*.pyd
+*.so
 *.egg-info/
 dist/
 build/
 *.spec
+
+# Database
 *.db
 
 # OS
 .DS_Store
 Thumbs.db
+desktop.ini
 
 # IDE
 .vscode/
 .idea/
+*.swp
+*.swo
 
-# App data
+# Application data
 .duplicate_photo_cleaner/
+
+# Virtual environment
+venv/
+env/
