@@ -4,13 +4,16 @@ on:
   push:
     branches: [ main, master ]
     tags: [ 'v*' ]
+  pull_request:
+    branches: [ main, master ]
   workflow_dispatch:
 
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
     
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -28,19 +31,24 @@ jobs:
   build:
     needs: test
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: windows-latest
             name: windows
+            extension: .exe
           - os: macos-latest
             name: macos
+            extension: ""
           - os: ubuntu-latest
             name: linux
+            extension: ""
 
     runs-on: ${{ matrix.os }}
 
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -62,31 +70,38 @@ jobs:
     - name: Build application (Windows)
       if: matrix.os == 'windows-latest'
       run: |
-        pyinstaller --onedir --windowed --name=DuplicatePhotoCleaner --add-data="src;src" --hidden-import=PIL._tkinter_finder --hidden-import=bcrypt._bcrypt main.py
+        pyinstaller --onedir --windowed --name=DuplicatePhotoCleaner --add-data="src;src" --hidden-import=PIL._tkinter_finder --hidden-import=bcrypt._bcrypt --hidden-import=tkinter --hidden-import=tkinter.ttk main.py
 
-    - name: Build application (macOS/Linux)  
+    - name: Build application (macOS/Linux)
       if: matrix.os != 'windows-latest'
       run: |
-        pyinstaller --onedir --windowed --name=DuplicatePhotoCleaner --add-data="src:src" --hidden-import=PIL._tkinter_finder --hidden-import=bcrypt._bcrypt main.py
+        pyinstaller --onedir --windowed --name=DuplicatePhotoCleaner --add-data="src:src" --hidden-import=PIL._tkinter_finder --hidden-import=bcrypt._bcrypt --hidden-import=tkinter --hidden-import=tkinter.ttk main.py
 
-    - name: Create portable archive (Windows)
+    - name: Create zip archive (Windows)
       if: matrix.os == 'windows-latest'
       run: |
         cd dist
-        Compress-Archive -Path DuplicatePhotoCleaner -DestinationPath ../DuplicatePhotoCleaner-${{ matrix.name }}.zip
+        Compress-Archive -Path "DuplicatePhotoCleaner" -DestinationPath "../DuplicatePhotoCleaner-${{ matrix.name }}.zip"
+        cd ..
+        echo "Created DuplicatePhotoCleaner-${{ matrix.name }}.zip"
+        dir "DuplicatePhotoCleaner-${{ matrix.name }}.zip"
       shell: powershell
 
-    - name: Create portable archive (macOS/Linux)
+    - name: Create zip archive (macOS/Linux)
       if: matrix.os != 'windows-latest'
       run: |
         cd dist
-        zip -r ../DuplicatePhotoCleaner-${{ matrix.name }}.zip DuplicatePhotoCleaner/
+        zip -r "../DuplicatePhotoCleaner-${{ matrix.name }}.zip" "DuplicatePhotoCleaner/"
+        cd ..
+        echo "Created DuplicatePhotoCleaner-${{ matrix.name }}.zip"
+        ls -la "DuplicatePhotoCleaner-${{ matrix.name }}.zip"
 
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:
         name: DuplicatePhotoCleaner-${{ matrix.name }}
         path: DuplicatePhotoCleaner-${{ matrix.name }}.zip
+        if-no-files-found: error
 
   release:
     if: startsWith(github.ref, 'refs/tags/')
@@ -96,31 +111,79 @@ jobs:
       contents: write
 
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
 
     - name: Download all artifacts
       uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+
+    - name: Display structure of downloaded files
+      run: ls -la artifacts/
+
+    - name: Prepare release files
+      run: |
+        mkdir -p release-files
+        find artifacts -name "*.zip" -exec cp {} release-files/ \;
+        ls -la release-files/
 
     - name: Create Release
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
-        files: |
-          DuplicatePhotoCleaner-windows/DuplicatePhotoCleaner-windows.zip
-          DuplicatePhotoCleaner-macos/DuplicatePhotoCleaner-macos.zip
-          DuplicatePhotoCleaner-linux/DuplicatePhotoCleaner-linux.zip
+        files: release-files/*.zip
         body: |
-          ## Duplicate Photo Cleaner ${{ github.ref_name }}
+          ## 🚀 Duplicate Photo Cleaner ${{ github.ref_name }}
           
-          Download for your operating system:
-          - **Windows**: DuplicatePhotoCleaner-windows.zip
-          - **macOS**: DuplicatePhotoCleaner-macos.zip  
-          - **Linux**: DuplicatePhotoCleaner-linux.zip
+          ### 📥 Downloads
           
-          ### Installation:
-          1. Download the zip file for your OS
-          2. Extract the contents
-          3. Run the executable inside the folder
+          Choose the version for your operating system:
+          
+          - **🪟 Windows**: `DuplicatePhotoCleaner-windows.zip`
+          - **🍎 macOS**: `DuplicatePhotoCleaner-macos.zip`  
+          - **🐧 Linux**: `DuplicatePhotoCleaner-linux.zip`
+          
+          ### 📦 Installation Instructions
+          
+          1. **Download** the appropriate zip file for your operating system
+          2. **Extract** the contents to a folder of your choice
+          3. **Run** the executable:
+             - **Windows**: Double-click `DuplicatePhotoCleaner.exe`
+             - **macOS**: Double-click `DuplicatePhotoCleaner`
+             - **Linux**: Run `./DuplicatePhotoCleaner` in terminal
+          
+          ### ✨ Features
+          
+          - 🔍 Smart duplicate photo detection
+          - 🛡️ Safe removal with holding folder
+          - 👥 Multi-user authentication
+          - 📊 Action history tracking
+          - 🖼️ Side-by-side comparison
+          
+          ### 🆕 What's New in This Version
+          
+          Check the commit history for detailed changes since the last release.
+          
+          ---
+          
+          **💡 Tip**: If you encounter any issues, check the [GitHub Issues](https://github.com/${{ github.repository }}/issues) page.
         draft: false
         prerelease: false
+        generate_release_notes: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Optional: Build status notification
+  notify-success:
+    if: always() && (needs.build.result == 'success' || needs.release.result == 'success')
+    needs: [build, release]
+    runs-on: ubuntu-latest
+    steps:
+    - name: Build Success
+      run: |
+        echo "✅ Build completed successfully!"
+        if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+          echo "🎉 Release created for ${{ github.ref_name }}"
+        else
+          echo "📦 Build artifacts are available in the Actions tab"
+        fi
