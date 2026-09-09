@@ -9,124 +9,47 @@ on:
 jobs:
   build:
     strategy:
-      fail-fast: false
       matrix:
         include:
           - os: windows-latest
             name: windows
+            ext: .exe
           - os: macos-latest
             name: macos
-          - os: ubuntu-latest
-            name: linux
+            ext: ""
 
     runs-on: ${{ matrix.os }}
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
+    - uses: actions/setup-python@v5
       with:
         python-version: '3.11'
 
-    - name: Install system dependencies (Linux)
-      if: matrix.os == 'ubuntu-latest'
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y python3-tk
-
-    - name: Install Python dependencies
+    - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install Pillow bcrypt pyinstaller
 
-    - name: Create simple main.py if needed
-      shell: bash
+    - name: Build Windows
+      if: matrix.os == 'windows-latest'
       run: |
-        if [ ! -f main.py ]; then
-          cat > main.py << 'EOF'
-        #!/usr/bin/env python3
-        import sys
-        import os
-        from pathlib import Path
-        
-        sys.path.insert(0, str(Path(__file__).parent / 'src'))
-        
-        def main():
-            try:
-                from gui.main_window import DuplicatePhotoCleanerApp
-                import tkinter as tk
-                
-                root = tk.Tk()
-                app = DuplicatePhotoCleanerApp(root)
-                root.mainloop()
-                
-            except Exception as e:
-                print(f"Error: {e}")
-                import traceback
-                traceback.print_exc()
-        
-        if __name__ == "__main__":
-            main()
-        EOF
-        fi
-
-    - name: Check project structure
-      run: |
-        echo "Checking project files:"
-        ls -la
-        echo "Checking src directory:"
-        ls -la src/ || echo "src directory not found"
-        if [ -d src ]; then
-          find src -name "*.py" | head -10
-        fi
-
-    - name: Build application (Simple approach)
-      shell: bash
-      run: |
-        # Simple build without add-data for now
         pyinstaller --onefile --windowed --name=DuplicatePhotoCleaner main.py
+        mkdir DuplicatePhotoCleaner-windows
+        copy dist\DuplicatePhotoCleaner.exe DuplicatePhotoCleaner-windows\
+        powershell Compress-Archive DuplicatePhotoCleaner-windows DuplicatePhotoCleaner-windows.zip
 
-    - name: Verify build output
-      shell: bash
+    - name: Build macOS
+      if: matrix.os == 'macos-latest'  
       run: |
-        echo "Build output:"
-        ls -la dist/
-        if [ "$RUNNER_OS" = "Windows" ]; then
-          file dist/DuplicatePhotoCleaner.exe || echo "Windows exe not found"
-        else
-          file dist/DuplicatePhotoCleaner || echo "Unix executable not found"
-        fi
+        pyinstaller --onefile --windowed --name=DuplicatePhotoCleaner main.py
+        mkdir DuplicatePhotoCleaner-macos
+        cp dist/DuplicatePhotoCleaner DuplicatePhotoCleaner-macos/
+        chmod +x DuplicatePhotoCleaner-macos/DuplicatePhotoCleaner
+        zip -r DuplicatePhotoCleaner-macos.zip DuplicatePhotoCleaner-macos/
 
-    - name: Create distribution package
-      shell: bash
-      run: |
-        mkdir -p "DuplicatePhotoCleaner-${{ matrix.name }}"
-        
-        if [ "$RUNNER_OS" = "Windows" ]; then
-          cp dist/DuplicatePhotoCleaner.exe "DuplicatePhotoCleaner-${{ matrix.name }}/"
-          echo "Duplicate Photo Cleaner for Windows" > "DuplicatePhotoCleaner-${{ matrix.name }}/README.txt"
-          echo "Double-click DuplicatePhotoCleaner.exe to run" >> "DuplicatePhotoCleaner-${{ matrix.name }}/README.txt"
-        else
-          cp dist/DuplicatePhotoCleaner "DuplicatePhotoCleaner-${{ matrix.name }}/"
-          chmod +x "DuplicatePhotoCleaner-${{ matrix.name }}/DuplicatePhotoCleaner"
-          echo "Duplicate Photo Cleaner for ${{ matrix.name }}" > "DuplicatePhotoCleaner-${{ matrix.name }}/README.txt"
-          echo "Run: ./DuplicatePhotoCleaner" >> "DuplicatePhotoCleaner-${{ matrix.name }}/README.txt"
-        fi
-
-    - name: Create zip archive
-      shell: bash
-      run: |
-        if [ "$RUNNER_OS" = "Windows" ]; then
-          powershell -Command "Compress-Archive -Path 'DuplicatePhotoCleaner-${{ matrix.name }}' -DestinationPath 'DuplicatePhotoCleaner-${{ matrix.name }}.zip'"
-        else
-          zip -r "DuplicatePhotoCleaner-${{ matrix.name }}.zip" "DuplicatePhotoCleaner-${{ matrix.name }}/"
-        fi
-        ls -la *.zip
-
-    - name: Upload build artifacts
-      uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v4
       with:
         name: DuplicatePhotoCleaner-${{ matrix.name }}
         path: DuplicatePhotoCleaner-${{ matrix.name }}.zip
@@ -137,44 +60,21 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Download all artifacts
-      uses: actions/download-artifact@v4
-
-    - name: List artifacts
-      run: |
-        echo "Downloaded artifacts:"
-        find . -name "*.zip" -type f
-        ls -la */
-
-    - name: Create Release
-      uses: softprops/action-gh-release@v2
+    - uses: actions/checkout@v4
+    - uses: actions/download-artifact@v4
+    - uses: softprops/action-gh-release@v2
       with:
         files: |
           DuplicatePhotoCleaner-windows/DuplicatePhotoCleaner-windows.zip
           DuplicatePhotoCleaner-macos/DuplicatePhotoCleaner-macos.zip
-          DuplicatePhotoCleaner-linux/DuplicatePhotoCleaner-linux.zip
         body: |
-          ## 🚀 Duplicate Photo Cleaner ${{ github.ref_name }}
+          ## Duplicate Photo Cleaner ${{ github.ref_name }}
           
-          ### 📥 Downloads
+          **Downloads:**
+          - Windows: DuplicatePhotoCleaner-windows.zip
+          - macOS: DuplicatePhotoCleaner-macos.zip
           
-          - **🪟 Windows**: DuplicatePhotoCleaner-windows.zip
-          - **🍎 macOS**: DuplicatePhotoCleaner-macos.zip  
-          - **🐧 Linux**: DuplicatePhotoCleaner-linux.zip
-          
-          ### 📦 Installation
-          
-          1. Download the appropriate zip file
-          2. Extract to any folder
-          3. Run the executable
-          
-          **Note**: This is an automated build. If you encounter issues, please report them on GitHub.
-        draft: false
-        prerelease: false
+          Extract and run the executable.
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
