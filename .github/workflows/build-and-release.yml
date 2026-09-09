@@ -13,16 +13,13 @@ jobs:
         include:
           - os: windows-latest
             name: windows
-            ext: .exe
           - os: macos-latest
             name: macos
-            ext: ""
 
     runs-on: ${{ matrix.os }}
 
     steps:
     - uses: actions/checkout@v4
-
     - uses: actions/setup-python@v5
       with:
         python-version: '3.11'
@@ -30,23 +27,27 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install Pillow bcrypt pyinstaller
+        pip install Pillow pyinstaller
 
-    - name: Build Windows
+    - name: Build executable
+      run: |
+        pyinstaller --onefile --windowed --name=DuplicatePhotoCleaner main.py
+
+    - name: Create package (Windows)
       if: matrix.os == 'windows-latest'
       run: |
-        pyinstaller --onefile --windowed --name=DuplicatePhotoCleaner main.py
         mkdir DuplicatePhotoCleaner-windows
         copy dist\DuplicatePhotoCleaner.exe DuplicatePhotoCleaner-windows\
+        echo "Duplicate Photo Cleaner - Right-click and run as administrator if needed" > DuplicatePhotoCleaner-windows\README.txt
         powershell Compress-Archive DuplicatePhotoCleaner-windows DuplicatePhotoCleaner-windows.zip
 
-    - name: Build macOS
-      if: matrix.os == 'macos-latest'  
+    - name: Create package (macOS)
+      if: matrix.os == 'macos-latest'
       run: |
-        pyinstaller --onefile --windowed --name=DuplicatePhotoCleaner main.py
         mkdir DuplicatePhotoCleaner-macos
         cp dist/DuplicatePhotoCleaner DuplicatePhotoCleaner-macos/
         chmod +x DuplicatePhotoCleaner-macos/DuplicatePhotoCleaner
+        echo "Duplicate Photo Cleaner - If macOS blocks it, right-click and choose Open" > DuplicatePhotoCleaner-macos/README.txt
         zip -r DuplicatePhotoCleaner-macos.zip DuplicatePhotoCleaner-macos/
 
     - uses: actions/upload-artifact@v4
@@ -69,12 +70,24 @@ jobs:
           DuplicatePhotoCleaner-windows/DuplicatePhotoCleaner-windows.zip
           DuplicatePhotoCleaner-macos/DuplicatePhotoCleaner-macos.zip
         body: |
-          ## Duplicate Photo Cleaner ${{ github.ref_name }}
+          ## 🖼️ Duplicate Photo Cleaner ${{ github.ref_name }}
+          
+          **Fixed macOS compatibility issues!**
           
           **Downloads:**
-          - Windows: DuplicatePhotoCleaner-windows.zip
-          - macOS: DuplicatePhotoCleaner-macos.zip
+          - **Windows**: DuplicatePhotoCleaner-windows.zip
+          - **macOS**: DuplicatePhotoCleaner-macos.zip
           
-          Extract and run the executable.
+          **Installation:**
+          1. Download and extract the zip
+          2. **macOS**: Right-click DuplicatePhotoCleaner → Open (if blocked by security)
+          3. **Windows**: Run DuplicatePhotoCleaner.exe (allow in Windows Defender if prompted)
+          
+          **Features:**
+          - ✅ Smart duplicate detection by file size
+          - ✅ Safe deletion (moves to ~/DuplicateCleanerTrash/)
+          - ✅ Multiple folder scanning
+          - ✅ Simple, reliable interface
+          - ✅ Works without internet connection
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
