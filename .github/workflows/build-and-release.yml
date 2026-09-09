@@ -13,7 +13,7 @@ jobs:
     - uses: actions/checkout@v4
     
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.9'
     
@@ -43,7 +43,7 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.9'
 
@@ -69,18 +69,21 @@ jobs:
       run: |
         pyinstaller --onedir --windowed --name=DuplicatePhotoCleaner --add-data="src:src" --hidden-import=PIL._tkinter_finder --hidden-import=bcrypt._bcrypt main.py
 
-    - name: Create portable archive
+    - name: Create portable archive (Windows)
+      if: matrix.os == 'windows-latest'
       run: |
         cd dist
-        if [ "$RUNNER_OS" == "Windows" ]; then
-          powershell Compress-Archive DuplicatePhotoCleaner DuplicatePhotoCleaner-${{ matrix.name }}.zip
-        else
-          zip -r ../DuplicatePhotoCleaner-${{ matrix.name }}.zip DuplicatePhotoCleaner/
-        fi
-      shell: bash
+        Compress-Archive -Path DuplicatePhotoCleaner -DestinationPath ../DuplicatePhotoCleaner-${{ matrix.name }}.zip
+      shell: powershell
+
+    - name: Create portable archive (macOS/Linux)
+      if: matrix.os != 'windows-latest'
+      run: |
+        cd dist
+        zip -r ../DuplicatePhotoCleaner-${{ matrix.name }}.zip DuplicatePhotoCleaner/
 
     - name: Upload build artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: DuplicatePhotoCleaner-${{ matrix.name }}
         path: DuplicatePhotoCleaner-${{ matrix.name }}.zip
@@ -96,7 +99,7 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: Download all artifacts
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
 
     - name: Create Release
       uses: softprops/action-gh-release@v1
@@ -109,8 +112,15 @@ jobs:
           ## Duplicate Photo Cleaner ${{ github.ref_name }}
           
           Download for your operating system:
-          - Windows: DuplicatePhotoCleaner-windows.zip
-          - macOS: DuplicatePhotoCleaner-macos.zip  
-          - Linux: DuplicatePhotoCleaner-linux.zip
+          - **Windows**: DuplicatePhotoCleaner-windows.zip
+          - **macOS**: DuplicatePhotoCleaner-macos.zip  
+          - **Linux**: DuplicatePhotoCleaner-linux.zip
+          
+          ### Installation:
+          1. Download the zip file for your OS
+          2. Extract the contents
+          3. Run the executable inside the folder
+        draft: false
+        prerelease: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
