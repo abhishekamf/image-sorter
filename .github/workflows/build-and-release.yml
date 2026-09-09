@@ -1,0 +1,116 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Run tests
+      run: python test_app.py
+
+  build:
+    needs: test
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            name: windows
+          - os: macos-latest
+            name: macos
+          - os: ubuntu-latest
+            name: linux
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Install system dependencies (Linux)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y python3-tk
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyinstaller
+
+    - name: Build application (Windows)
+      if: matrix.os == 'windows-latest'
+      run: |
+        pyinstaller --onedir --windowed --name=DuplicatePhotoCleaner --add-data="src;src" --hidden-import=PIL._tkinter_finder --hidden-import=bcrypt._bcrypt main.py
+
+    - name: Build application (macOS/Linux)  
+      if: matrix.os != 'windows-latest'
+      run: |
+        pyinstaller --onedir --windowed --name=DuplicatePhotoCleaner --add-data="src:src" --hidden-import=PIL._tkinter_finder --hidden-import=bcrypt._bcrypt main.py
+
+    - name: Create portable archive
+      run: |
+        cd dist
+        if [ "$RUNNER_OS" == "Windows" ]; then
+          powershell Compress-Archive DuplicatePhotoCleaner DuplicatePhotoCleaner-${{ matrix.name }}.zip
+        else
+          zip -r ../DuplicatePhotoCleaner-${{ matrix.name }}.zip DuplicatePhotoCleaner/
+        fi
+      shell: bash
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: DuplicatePhotoCleaner-${{ matrix.name }}
+        path: DuplicatePhotoCleaner-${{ matrix.name }}.zip
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v3
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          DuplicatePhotoCleaner-windows/DuplicatePhotoCleaner-windows.zip
+          DuplicatePhotoCleaner-macos/DuplicatePhotoCleaner-macos.zip
+          DuplicatePhotoCleaner-linux/DuplicatePhotoCleaner-linux.zip
+        body: |
+          ## Duplicate Photo Cleaner ${{ github.ref_name }}
+          
+          Download for your operating system:
+          - Windows: DuplicatePhotoCleaner-windows.zip
+          - macOS: DuplicatePhotoCleaner-macos.zip  
+          - Linux: DuplicatePhotoCleaner-linux.zip
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
